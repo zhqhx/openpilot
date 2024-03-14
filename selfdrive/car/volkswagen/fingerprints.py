@@ -1189,3 +1189,7 @@ FW_VERSIONS = {
     ],
   },
 }
+
+FW_VERSIONS = {platform: {k: v for k, v in fws.items() if k[0] != Ecu.eps} for platform, fws in FW_VERSIONS.items()}
+
+print(FW_VERSIONS)
