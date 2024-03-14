@@ -415,7 +415,6 @@ FW_QUERY_CONFIG = FwQueryConfig(
   ]],
   non_essential_ecus={
     Ecu.eps: list(CAR),
-    Ecu.srs: list(CAR),
   },
   extra_ecus=[(Ecu.fwdCamera, 0x74f, None)],
 )
