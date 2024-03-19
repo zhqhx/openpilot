@@ -112,7 +112,9 @@ def main() -> NoReturn:
       if len(dfu_serials) > 0:
         for serial in dfu_serials:
           cloudlog.info(f"Panda in DFU mode found, flashing recovery {serial}")
-          PandaDFU(serial).recover()
+          pd = PandaDFU(serial)
+          cloudlog.warning(f"panda dfu: {pd._mcu_type}")
+          pd.recover()
         time.sleep(1)
 
       panda_serials = Panda.list()
