@@ -21,7 +21,7 @@ MODEL_WIDTH = 1440
 MODEL_HEIGHT = 960
 FEATURE_LEN = 1536
 CONTEXT_LEN = 100
-OUTPUT_SIZE = 84 + 10 + FEATURE_LEN
+OUTPUT_SIZE = 82 + 10 + FEATURE_LEN
 SEND_RAW_PRED = os.getenv('SEND_RAW_PRED')
 MODEL_PATHS = {
   ModelRunner.SNPE: Path(__file__).parent / 'models/dmonitoring_model_q.dlc',
