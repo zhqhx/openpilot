@@ -208,11 +208,11 @@ def main():
     monitoringstate_msg = messaging.new_message('driverMonitoringState', valid=sm_valid and history_valid)
 
     if driverstate_msg.valid:
-      fill_driverstatev2_packet(model_result, driverstate_msg)
+      fill_driverstatev2_packet(model_result, driverstate_msg, vipc_client.frame_id, t2 - t1, dsp_execution_time)
     if monitoringstate_msg.valid:
       fill_monitoringstate_packet(model_result, monitoringstate_msg)
 
-    pm.send("driverStateV2", driverstate_msg, vipc_client.frame_id, t2 - t1, dsp_execution_time)
+    pm.send("driverStateV2", driverstate_msg)
     pm.send("driverMonitoringState", monitoringstate_msg)
 
 
