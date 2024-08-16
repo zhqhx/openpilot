@@ -83,7 +83,7 @@ class ModelState:
     for name in self.inputs.keys():
       self.model.addInput(name, self.inputs[name] if name != 'input_img' else None)
 
-    self.inputs['awareness'] = 1.
+    self.inputs['awareness'] = np.full(1, 1., dtype=np.float32)
 
   def run(self, buf:VisionBuf, inputs: dict[str, np.ndarray], history_valid: bool) -> tuple[DMonitoringModelResult, float]:
     v_offset = buf.height - MODEL_HEIGHT
@@ -106,7 +106,7 @@ class ModelState:
     self.inputs['features'][-FEATURE_LEN:] = model_result.feature
 
     if history_valid:
-      self.inputs['awareness'] = model_result.awareness[0]
+      self.inputs['awareness'] = np.full(1, model_result.awareness[0], dtype=np.float32)
 
     return model_result, t2 - t1
 
