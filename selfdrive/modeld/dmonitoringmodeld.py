@@ -140,7 +140,7 @@ def fill_driverstatev2_packet(model_result, msg):
 
 def fill_monitoringstate_packet(model_result, msg):
   ms = msg.driverMonitoringState
-  ms.awarenessStatus = model_result.awareness
+  ms.awarenessStatus = model_result.awareness[0]
   ms.isActiveMode = model_result.active_mode_prob > 0.5
   ms.isRHD = model_result.rhd_prob > 0.1
 
