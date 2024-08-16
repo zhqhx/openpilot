@@ -126,16 +126,16 @@ def fill_driver_state(msg, ds_result: DriverStateResult):
   msg.readyProb = [sigmoid(x) for x in ds_result.ready_prob]
   msg.notReadyProb = [sigmoid(x) for x in ds_result.not_ready_prob]
 
-def fill_driverstatev2_packet(model_result, msg):
-  # ds = msg.driverStateV2
-  # ds.frameId = frame_id
-  # ds.modelExecutionTime = execution_time
-  # ds.dspExecutionTime = dsp_execution_time
-  # ds.poorVisionProb = sigmoid(model_result.poor_vision_prob)
-  # ds.wheelOnRightProb = sigmoid(model_result.wheel_on_right_prob)
-  # ds.rawPredictions = model_output.tobytes() if SEND_RAW_PRED else b''
-  # fill_driver_state(ds.leftDriverData, model_result.driver_state_lhd)
-  # fill_driver_state(ds.rightDriverData, model_result.driver_state_rhd)
+def fill_driverstatev2_packet(model_result, msg, frame_id, execution_time, dsp_execution_time):
+  ds = msg.driverStateV2
+  ds.frameId = frame_id
+  ds.modelExecutionTime = execution_time
+  ds.dspExecutionTime = dsp_execution_time
+  ds.poorVisionProb = sigmoid(model_result.poor_vision_prob)
+  ds.wheelOnRightProb = sigmoid(model_result.wheel_on_right_prob)
+  ds.rawPredictions = model_result.tobytes() if SEND_RAW_PRED else b''
+  fill_driver_state(ds.leftDriverData, model_result.driver_state_lhd)
+  fill_driver_state(ds.rightDriverData, model_result.driver_state_rhd)
   return msg
 
 def fill_monitoringstate_packet(model_result, msg):
@@ -212,7 +212,7 @@ def main():
     if monitoringstate_msg.valid:
       fill_monitoringstate_packet(model_result, monitoringstate_msg)
 
-    pm.send("driverStateV2", driverstate_msg)
+    pm.send("driverStateV2", driverstate_msg, vipc_client.frame_id, t2 - t1, dsp_execution_time)
     pm.send("driverMonitoringState", monitoringstate_msg)
 
 
