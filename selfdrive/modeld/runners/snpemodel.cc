@@ -83,7 +83,7 @@ void SNPEModel::addInput(const std::string name, float *buffer, int size) {
   if (!input_tensor_names_opt) throw std::runtime_error("Error obtaining input tensor names");
   const auto &input_tensor_names = *input_tensor_names_opt;
   const char *input_tensor_name = input_tensor_names.at(idx);
-  const bool input_tf8 = use_tf8 && strcmp(input_tensor_name, "input_img") == 0;  // TODO: This is a terrible hack, get rid of this name check both here and in onnx_runner.py
+  const bool input_tf8 = use_tf8 && strcmp(input_tensor_name, "img_last") == 0;  // TODO: This is a terrible hack, get rid of this name check both here and in onnx_runner.py
   LOGW("adding index %d: %s", idx, input_tensor_name);
 
   zdl::DlSystem::UserBufferEncodingFloat ub_encoding_float;
