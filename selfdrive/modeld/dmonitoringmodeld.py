@@ -131,8 +131,6 @@ def fill_driverstatev2_packet(model_result, msg, frame_id, execution_time, dsp_e
   ds.frameId = frame_id
   ds.modelExecutionTime = execution_time
   ds.dspExecutionTime = dsp_execution_time
-  ds.poorVisionProb = sigmoid(model_result.poor_vision_prob)
-  ds.wheelOnRightProb = sigmoid(model_result.wheel_on_right_prob)
   ds.rawPredictions = model_result.tobytes() if SEND_RAW_PRED else b''
   fill_driver_state(ds.leftDriverData, model_result.driver_state_lhd)
   fill_driver_state(ds.rightDriverData, model_result.driver_state_rhd)
