@@ -166,7 +166,7 @@ def main():
 
     sm.update(0)
 
-    sm_valid = sm.all_checks()
+    sm_valid = sm.all_alive() and sm.all_valid()
     history_valid = frames_run >= CONTEXT_LEN - 1
 
     if sm_valid:
