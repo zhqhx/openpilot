@@ -13,8 +13,11 @@ from msgq.visionipc import VisionIpcClient, VisionStreamType, VisionBuf
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
 from openpilot.common.realtime import set_realtime_priority
+from openpilot.selfdrive.controls.lib.events import Events
 from openpilot.selfdrive.modeld.runners import ModelRunner, Runtime
 from openpilot.selfdrive.modeld.models.commonmodel_pyx import sigmoid
+
+EventName = car.CarEvent.EventName
 
 REG_SCALE = 0.25
 MODEL_WIDTH = 1440
@@ -123,7 +126,7 @@ def fill_driver_state(msg, ds_result: DriverStateResult):
   msg.readyProb = [sigmoid(x) for x in ds_result.ready_prob]
   msg.notReadyProb = [sigmoid(x) for x in ds_result.not_ready_prob]
 
-def fill_driverstatev2_packet(msg):
+def fill_driverstatev2_packet(model_result, msg):
   # ds = msg.driverStateV2
   # ds.frameId = frame_id
   # ds.modelExecutionTime = execution_time
@@ -135,7 +138,20 @@ def fill_driverstatev2_packet(msg):
   # fill_driver_state(ds.rightDriverData, model_result.driver_state_rhd)
   return msg
 
-def fill_monitoringstate_packet(msg):
+def fill_monitoringstate_packet(model_result, msg):
+  ms = msg.driverMonitoringState
+  ms.awarenessStatus = model_result.awareness
+  ms.isActiveMode = model_result.active_mode_prob > 0.5
+  ms.isRHD = model_result.rhd_prob > 0.1
+
+  evts = Events()
+  if model_result.alerts_prob[0] > 0.2:
+    evts.add(EventName.preDriverDistracted)
+  if model_result.alerts_prob[1] > 0.5:
+    evts.add(EventName.promptDriverDistracted)
+  if model_result.alerts_prob[2] > 0.7:
+    evts.add(EventName.driverDistracted)
+  ms.events = evts.to_msg()
   return msg
 
 
@@ -192,9 +208,9 @@ def main():
     monitoringstate_msg = messaging.new_message('driverMonitoringState', valid=sm_valid and history_valid)
 
     if driverstate_msg.valid:
-      fill_driverstatev2_packet(driverstate_msg)
+      fill_driverstatev2_packet(model_result, driverstate_msg)
     if monitoringstate_msg.valid:
-      fill_monitoringstate_packet(monitoringstate_msg)
+      fill_monitoringstate_packet(model_result, monitoringstate_msg)
 
     pm.send("driverStateV2", driverstate_msg)
     pm.send("driverMonitoringState", monitoringstate_msg)
