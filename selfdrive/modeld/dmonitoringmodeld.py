@@ -141,15 +141,15 @@ def fill_driverstatev2_packet(model_result, msg, frame_id, execution_time, dsp_e
 def fill_monitoringstate_packet(model_result, msg):
   ms = msg.driverMonitoringState
   ms.awarenessStatus = model_result.awareness[0]
-  ms.isActiveMode = model_result.active_mode_prob > 0.5
-  ms.isRHD = model_result.rhd_prob > 0.1
+  ms.isActiveMode = sigmoid(model_result.active_mode_prob) > 0.5
+  ms.isRHD = sigmoid(model_result.rhd_prob) > 0.1
 
   evts = Events()
-  if model_result.alerts_prob[0] > 0.2:
+  if sigmoid(model_result.alerts_prob[0]) > 0.2:
     evts.add(EventName.preDriverDistracted)
-  if model_result.alerts_prob[1] > 0.5:
+  if sigmoid(model_result.alerts_prob[1]) > 0.5:
     evts.add(EventName.promptDriverDistracted)
-  if model_result.alerts_prob[2] > 0.7:
+  if sigmoid(model_result.alerts_prob[2]) > 0.7:
     evts.add(EventName.driverDistracted)
   ms.events = evts.to_msg()
   return msg
