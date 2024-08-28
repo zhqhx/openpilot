@@ -13,7 +13,7 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 COPY tools/install_ubuntu_dependencies.sh /tmp/tools/
-RUN INSTALL_EXTRA_PACKAGES=no /tmp/tools/install_ubuntu_dependencies.sh && \
+RUN /tmp/tools/install_ubuntu_dependencies.sh && \
     rm -rf /var/lib/apt/lists/* /tmp/* && \
     cd /usr/lib/gcc/arm-none-eabi/* && \
     rm -rf arm/ thumb/nofp thumb/v6* thumb/v8* thumb/v7+fp thumb/v7-r+fp.sp
@@ -68,20 +68,17 @@ RUN usermod -aG sudo $USER
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 USER $USER
 
-ENV POETRY_VIRTUALENVS_CREATE=false
-ENV PYENV_VERSION=3.12.4
-ENV PYENV_ROOT="/home/$USER/pyenv"
-ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
-
-COPY --chown=$USER pyproject.toml poetry.lock /tmp/
+COPY --chown=$USER pyproject.toml uv.lock /tmp/
 COPY --chown=$USER tools/install_python_dependencies.sh /tmp/tools/
 
+ENV VIRTUAL_ENV=/home/$USER/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN cd /tmp && \
     tools/install_python_dependencies.sh && \
+    mkdir -p $VIRTUAL_ENV && \
+    cp -r /tmp/.venv/* $VIRTUAL_ENV && \
     rm -rf /tmp/* && \
-    rm -rf /home/$USER/.cache && \
-    find /home/$USER/pyenv -type d -name ".git" | xargs rm -rf && \
-    rm -rf /home/$USER/pyenv/versions/3.12.4/lib/python3.12/test
+    rm -rf /home/$USER/.cache
 
 USER root
 RUN sudo git config --global --add safe.directory /tmp/openpilot

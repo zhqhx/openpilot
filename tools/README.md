@@ -26,16 +26,23 @@ git clone --recurse-submodules https://github.com/commaai/openpilot.git
 
 ``` bash
 cd openpilot
-git lfs pull
 tools/ubuntu_setup.sh
 ```
 
-Activate a shell with the Python dependencies installed:
+**3. Git LFS**
+
 ``` bash
-poetry shell
+git lfs pull
 ```
 
-**3. Build openpilot**
+**4. Activate a python shell**
+
+Activate a shell with the Python dependencies installed:
+``` bash
+source .venv/bin/activate
+```
+
+**5. Build openpilot**
 
 ``` bash
 scons -u -j$(nproc)
@@ -76,6 +83,5 @@ Learn about the openpilot ecosystem and tools by playing our [CTF](/tools/CTF.md
 ├── scripts/            # Miscellaneous scripts
 ├── serial/             # Tools for using the comma serial
 ├── sim/                # Run openpilot in a simulator
-├── ssh/                # SSH into a comma device
 └── webcam/             # Run openpilot on a PC with webcams
 ```

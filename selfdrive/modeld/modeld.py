@@ -6,9 +6,10 @@ import numpy as np
 import cereal.messaging as messaging
 from cereal import car, log
 from pathlib import Path
-from openpilot.common.threadname import setthreadname
+from setproctitle import setproctitle
 from cereal.messaging import PubMaster, SubMaster
 from msgq.visionipc import VisionIpcClient, VisionStreamType, VisionBuf
+from opendbc.car.car_helpers import get_demo_car_params
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
 from openpilot.common.filter_simple import FirstOrderFilter
@@ -16,7 +17,7 @@ from openpilot.common.realtime import config_realtime_process
 from openpilot.common.transformations.camera import DEVICE_CAMERAS
 from openpilot.common.transformations.model import get_warp_matrix
 from openpilot.system import sentry
-from openpilot.selfdrive.car.car_helpers import get_demo_car_params
+from openpilot.selfdrive.car.card import convert_to_capnp
 from openpilot.selfdrive.controls.lib.desire_helper import DesireHelper
 from openpilot.selfdrive.modeld.runners import ModelRunner, Runtime
 from openpilot.selfdrive.modeld.parse_model_outputs import Parser
@@ -24,7 +25,7 @@ from openpilot.selfdrive.modeld.fill_model_msg import fill_model_msg, fill_pose_
 from openpilot.selfdrive.modeld.constants import ModelConstants
 from openpilot.selfdrive.modeld.models.commonmodel_pyx import ModelFrame, CLContext
 
-THREAD_NAME = "selfdrive.modeld.modeld"
+PROCESS_NAME = "selfdrive.modeld.modeld"
 SEND_RAW_PRED = os.getenv('SEND_RAW_PRED')
 
 MODEL_PATHS = {
@@ -141,9 +142,9 @@ class ModelState:
 def main(demo=False):
   cloudlog.warning("modeld init")
 
-  sentry.set_tag("daemon", THREAD_NAME)
-  cloudlog.bind(daemon=THREAD_NAME)
-  setthreadname("modeld")
+  sentry.set_tag("daemon", PROCESS_NAME)
+  cloudlog.bind(daemon=PROCESS_NAME)
+  setproctitle(PROCESS_NAME)
   config_realtime_process(7, 54)
 
   cloudlog.warning("setting up CL context")
@@ -176,7 +177,7 @@ def main(demo=False):
     cloudlog.warning(f"connected extra cam with buffer size: {vipc_client_extra.buffer_len} ({vipc_client_extra.width} x {vipc_client_extra.height})")
 
   # messaging
-  pm = PubMaster(["modelV2", "cameraOdometry"])
+  pm = PubMaster(["modelV2", "drivingModelData", "cameraOdometry"])
   sm = SubMaster(["deviceState", "carState", "roadCameraState", "liveCalibration", "driverMonitoringState", "carControl"])
 
   publish_state = PublishState()
@@ -197,10 +198,10 @@ def main(demo=False):
 
 
   if demo:
-    CP = get_demo_car_params()
+    CP = convert_to_capnp(get_demo_car_params())
   else:
-    with car.CarParams.from_bytes(params.get("CarParams", block=True)) as msg:
-      CP = msg
+    CP = messaging.log_from_bytes(params.get("CarParams", block=True), car.CarParams)
+
   cloudlog.info("modeld got CarParams: %s", CP.carName)
 
   # TODO this needs more thought, use .2s extra for now to estimate other delays
@@ -286,9 +287,10 @@ def main(demo=False):
 
     if model_output is not None:
       modelv2_send = messaging.new_message('modelV2')
+      drivingdata_send = messaging.new_message('drivingModelData')
       posenet_send = messaging.new_message('cameraOdometry')
-      fill_model_msg(modelv2_send, model_output, publish_state, meta_main.frame_id, meta_extra.frame_id, frame_id, frame_drop_ratio,
-                      meta_main.timestamp_eof, model_execution_time, live_calib_seen)
+      fill_model_msg(drivingdata_send, modelv2_send, model_output, publish_state, meta_main.frame_id, meta_extra.frame_id, frame_id,
+                     frame_drop_ratio, meta_main.timestamp_eof, model_execution_time, live_calib_seen)
 
       desire_state = modelv2_send.modelV2.meta.desireState
       l_lane_change_prob = desire_state[log.Desire.laneChangeLeft]
@@ -297,9 +299,12 @@ def main(demo=False):
       DH.update(sm['carState'], sm['carControl'].latActive, lane_change_prob)
       modelv2_send.modelV2.meta.laneChangeState = DH.lane_change_state
       modelv2_send.modelV2.meta.laneChangeDirection = DH.lane_change_direction
+      drivingdata_send.drivingModelData.meta.laneChangeState = DH.lane_change_state
+      drivingdata_send.drivingModelData.meta.laneChangeDirection = DH.lane_change_direction
 
       fill_pose_msg(posenet_send, model_output, meta_main.frame_id, vipc_dropped_frames, meta_main.timestamp_eof, live_calib_seen)
       pm.send('modelV2', modelv2_send)
+      pm.send('drivingModelData', drivingdata_send)
       pm.send('cameraOdometry', posenet_send)
 
     last_vipc_frame_id = meta_main.frame_id
@@ -313,7 +318,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(demo=args.demo)
   except KeyboardInterrupt:
-    cloudlog.warning(f"child {THREAD_NAME} got SIGINT")
+    cloudlog.warning(f"child {PROCESS_NAME} got SIGINT")
   except Exception:
     sentry.capture_exception()
     raise

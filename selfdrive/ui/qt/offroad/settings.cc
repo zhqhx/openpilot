@@ -69,20 +69,6 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
       tr("Display speed in km/h instead of mph."),
       "../assets/offroad/icon_metric.png",
     },
-#ifdef ENABLE_MAPS
-    {
-      "NavSettingTime24h",
-      tr("Show ETA in 24h Format"),
-      tr("Use 24h format instead of am/pm"),
-      "../assets/offroad/icon_metric.png",
-    },
-    {
-      "NavSettingLeftSide",
-      tr("Show Map on Left Side of UI"),
-      tr("Show map on left side when in split screen view."),
-      "../assets/offroad/icon_road.png",
-    },
-#endif
   };
 
 
@@ -262,7 +248,7 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   addItem(translateBtn);
 
   QObject::connect(uiState(), &UIState::primeTypeChanged, [this] (PrimeType type) {
-    pair_device->setVisible(type == PrimeType::UNPAIRED);
+    pair_device->setVisible(type == PrimeType::PRIME_TYPE_UNPAIRED);
   });
   QObject::connect(uiState(), &UIState::offroadTransition, [=](bool offroad) {
     for (auto btn : findChildren<ButtonControl *>()) {
@@ -350,7 +336,7 @@ void DevicePanel::poweroff() {
 }
 
 void DevicePanel::showEvent(QShowEvent *event) {
-  pair_device->setVisible(uiState()->primeType() == PrimeType::UNPAIRED);
+  pair_device->setVisible(uiState()->primeType() == PrimeType::PRIME_TYPE_UNPAIRED);
   ListWidget::showEvent(event);
 }
 
