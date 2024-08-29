@@ -174,12 +174,9 @@ class LocationEstimator:
       trans_calib_std *= 10
 
       rot_device_std = rotate_std(self.device_from_calib, rot_calib_std)
-      trans_device_std = rotate_std(self.device_from_calib, trans_calib_std)
-      rot_device_noise = rot_device_std ** 2
-      trans_device_noise = trans_device_std ** 2
 
-      cam_odo_rot_res = self.kf.predict_and_observe(t, ObservationKind.CAMERA_ODO_ROTATION, rot_device, rot_device_noise)
-      cam_odo_trans_res = self.kf.predict_and_observe(t, ObservationKind.CAMERA_ODO_TRANSLATION, trans_device, trans_device_noise)
+      cam_odo_rot_res = self.kf.predict_and_observe(t, ObservationKind.CAMERA_ODO_ROTATION, rot_device)
+      cam_odo_trans_res = self.kf.predict_and_observe(t, ObservationKind.CAMERA_ODO_TRANSLATION, trans_device)
       self.camodo_yawrate_distribution =  np.array([rot_device[2], rot_device_std[2]])
       if cam_odo_rot_res is not None:
         _, _, _, _, _, _, (cam_odo_rot_err,), _, _ = cam_odo_rot_res
@@ -248,11 +245,18 @@ def main():
   observation_input_invalid = defaultdict(int)
 
   initial_pose = params.get("LocationFilterInitialState")
+  mesh_xs = None
   if initial_pose is not None:
     initial_pose = json.loads(initial_pose)
-    x_initial = np.array(initial_pose["x"], dtype=np.float64)
-    P_initial = np.diag(np.array(initial_pose["P"], dtype=np.float64))
-    estimator.reset(None, x_initial, P_initial)
+    if "mesh_x" in initial_pose:
+      mesh_xs = np.array(initial_pose["mesh_x"], dtype=np.float64)
+      estimator.reset(None, mesh_xs[0], PoseKalman.initial_P)
+    else:
+      x_initial = np.array(initial_pose["x"], dtype=np.float64)
+      P_initial = np.diag(np.array(initial_pose["P"], dtype=np.float64))
+      estimator.reset(None, x_initial, P_initial)
+
+  cnt = 0
 
   while True:
     sm.update()
@@ -276,8 +280,12 @@ def main():
       inputs_valid = sm.all_valid() and critical_service_inputs_valid and not observation_timing_invalid
       sensors_valid = sm.all_checks(["accelerometer", "gyroscope"])
 
+      estimator.reset(estimator.kf.filter.get_filter_time(), mesh_xs[cnt], PoseKalman.initial_P)
+
       msg = estimator.get_msg(sensors_valid, inputs_valid, filter_initialized)
       pm.send("livePose", msg)
+
+      cnt = (cnt + 1) % len(mesh_xs)
 
 
 if __name__ == "__main__":
