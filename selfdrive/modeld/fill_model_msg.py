@@ -41,7 +41,6 @@ def fill_xyvat(builder, t, x, y, v, a, x_std=None, y_std=None, v_std=None, a_std
   if a_std is not None:
     builder.aStd = a_std.tolist()
 
-
 def fill_xyz_poly(builder, degree, x, y, z):
   xyz = np.stack([x, y, z], axis=1)
   coeffs = np.polynomial.polynomial.polyfit(ModelConstants.T_IDXS, xyz, deg=degree)
