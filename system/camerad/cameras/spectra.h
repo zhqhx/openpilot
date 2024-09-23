@@ -109,10 +109,14 @@ public:
 
   int32_t link_handle = -1;
 
-  const int buf0_size = 65624; // unclear what this is and how it's determined, for internal ISP use? it's just copied from an ioctl dump
+  void *buf0_ptr;
+  int buf0_handle = 0;
+  const int buf0_size = 68472; // unclear what this is and how it's determined, for internal ISP use? it's just copied from an ioctl dump
   const int buf0_alignment = 0x20;
 
-  int buf0_handle = 0;
+  void *src_ptr;
+  int src_handle = 0;
+
   int buf_handle[FRAME_BUF_COUNT] = {};
   int sync_objs[FRAME_BUF_COUNT] = {};
   uint64_t request_ids[FRAME_BUF_COUNT] = {};
