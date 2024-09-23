@@ -208,7 +208,7 @@ struct cam_isp_in_port_info {
         uint32_t                        custom_csid;
 	uint32_t                        reserved;
 	uint32_t                        num_out_res;
-	struct cam_isp_out_port_info    data[1];
+	struct cam_isp_out_port_info    data[0xa];
 };
 
 /**

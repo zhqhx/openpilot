@@ -439,6 +439,8 @@ void SpectraCamera::config_ife(int io_mem_handle, int fence, int request_id, int
     /*
       TODO: build this
       - both blobs match exactly between two dumps
+      - hal3_test produces at least three different blobs
+      - contains registers for IQ modules?
     */
     unsigned char* isp_prog;
     if (io_mem_handle == 0) {
@@ -449,7 +451,7 @@ void SpectraCamera::config_ife(int io_mem_handle, int fence, int request_id, int
       isp_prog = isp_prog2;
     }
     printf("isp program length %d\n", buf_desc[0].length);
-    memcpy((unsigned char*)buf0_ptr + buf_desc[0].offset, isp_prog, buf_desc[0].length);
+    //memcpy((unsigned char*)buf0_ptr + buf_desc[0].offset, isp_prog, buf_desc[0].length);
     pkt->kmd_cmd_buf_offset = buf_desc[0].length;
     pkt->kmd_cmd_buf_index = 0;
 
@@ -725,12 +727,75 @@ void SpectraCamera::configISP() {
     .custom_csid = 0x0,
 
     // ISP outputs
-    .num_out_res = 0x1,
+    .num_out_res = 0xa,
     .data[0] = (struct cam_isp_out_port_info){
       .res_type = CAM_ISP_IFE_OUT_RES_FULL,
-      .format = CAM_FORMAT_NV12,
+      .format = CAM_FORMAT_UBWC_TP10,
       .width = sensor->frame_width,
       .height = sensor->frame_height + sensor->extra_height,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[1] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_DS4,
+      .format = CAM_FORMAT_PD10,
+      .width = sensor->frame_width / 4, // TODO: same here
+      .height = (sensor->frame_height + sensor->extra_height) / 4,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[2] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_DS16,
+      .format = CAM_FORMAT_PD10,
+      .width = sensor->frame_width / 16,
+      .height = (sensor->frame_height + sensor->extra_height)/16,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[3] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_HDR_BE,
+      .format = CAM_FORMAT_PLAIN64,
+      .width = 0x48000,
+      .height = 1,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[4] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_TL_BG,
+      .format = CAM_FORMAT_PLAIN64,
+      .width = 0x48000,
+      .height = 1,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[5] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_AWB_BG,
+      .format = CAM_FORMAT_PLAIN64,
+      .width = 0x151800,
+      .height = 1,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[6] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_HDR_BHIST,
+      .format = CAM_FORMAT_PLAIN64,
+      .width = 0x1800,
+      .height = 1,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[7] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_BHIST,
+      .format = CAM_FORMAT_PLAIN64,
+      .width = 0x8000,
+      .height = 1,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[8] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_RS,
+      .format = CAM_FORMAT_PLAIN16_16,
+      .width = 0x10000,
+      .height = 1,
+      .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
+    },
+    .data[9] = (struct cam_isp_out_port_info){
+      .res_type = CAM_ISP_IFE_OUT_RES_STATS_BF,
+      .format = CAM_FORMAT_PLAIN64,
+      .width = 0x2d10,
+      .height = 0x1,
       .comp_grp_id = 0x0, .split_point = 0x0, .secure_mode = 0x0,
     },
   };
