@@ -263,7 +263,7 @@ struct cam_isp_port_hfr_config {
 struct cam_isp_resource_hfr_config {
 	uint32_t                       num_ports;
 	uint32_t                       reserved;
-	struct cam_isp_port_hfr_config port_hfr_config[1];
+	struct cam_isp_port_hfr_config port_hfr_config[0xa];
 } __attribute__((packed));
 
 /**

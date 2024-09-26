@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "media/cam_req_mgr.h"
+#include "media/cam_isp.h"
 
 #include "common/util.h"
 #include "system/camerad/cameras/tici.h"
@@ -98,6 +99,8 @@ public:
   bool enabled = true;
   CameraConfig cc;
   std::unique_ptr<const SensorInfo> sensor;
+
+  struct cam_isp_in_port_info in_port_info;
 
   unique_fd sensor_fd;
   unique_fd csiphy_fd;
