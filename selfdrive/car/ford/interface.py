@@ -22,9 +22,20 @@ class CarInterface(CarInterfaceBase):
     ret.steerActuatorDelay = 0.2
     ret.steerLimitTimer = 1.0
 
-    ret.longitudinalTuning.kpBP = [0.]
-    ret.longitudinalTuning.kpV = [0.5]
-    ret.longitudinalTuning.kiV = [0.]
+    # 优化纵向控制参数，提高弯道减速和加速响应
+    ret.longitudinalTuning.kpBP = [0., 10.0 * CV.MPH_TO_MS, 20.0 * CV.MPH_TO_MS, 30.0 * CV.MPH_TO_MS]
+    ret.longitudinalTuning.kpV = [0.5, 0.4, 0.3, 0.2]
+    ret.longitudinalTuning.kiBP = [0., 10.0 * CV.MPH_TO_MS, 20.0 * CV.MPH_TO_MS]
+    ret.longitudinalTuning.kiV = [0.1, 0.05, 0.02]
+    ret.longitudinalTuning.deadzoneBP = [0.]
+    ret.longitudinalTuning.deadzoneV = [0.0]
+
+    # 增加车辆模型参数，优化弯道减速
+    ret.mass = 2242.0 + 136.0  # 车辆质量（kg），包括乘客和行李
+    ret.wheelbase = 3.025      # 轴距（m）
+    ret.steerRatio = 16.0      # 转向比
+    ret.tireStiffnessFront = 1e6  # 前轮胎刚度
+    ret.tireStiffnessRear = 1e6   # 后轮胎刚度
 
     CAN = CanBus(fingerprint=fingerprint)
     cfgs = [get_safety_config(car.CarParams.SafetyModel.ford)]
@@ -40,8 +51,7 @@ class CarInterface(CarInterfaceBase):
     if ret.flags & FordFlags.CANFD:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_FORD_CANFD
     else:
-      # Lock out if the car does not have needed lateral and longitudinal control APIs.
-      # Note that we also check CAN for adaptive cruise, but no known signal for LCA exists
+      # 检查车辆是否支持横向和纵向控制
       pscm_config = next((fw for fw in car_fw if fw.ecu == Ecu.eps and b'\x22\xDE\x01' in fw.request), None)
       if pscm_config:
         if len(pscm_config.fwVersion) != 24:
@@ -52,7 +62,7 @@ class CarInterface(CarInterfaceBase):
           if config_tja != 0xFF or config_lca != 0xFF:
             ret.dashcamOnly = True
 
-    # Auto Transmission: 0x732 ECU or Gear_Shift_by_Wire_FD1
+    # 自动变速箱检测
     found_ecus = [fw.ecu for fw in car_fw]
     if Ecu.shiftByWire in found_ecus or 0x5A in fingerprint[CAN.main] or docs:
       ret.transmissionType = TransmissionType.automatic
@@ -60,11 +70,10 @@ class CarInterface(CarInterfaceBase):
       ret.transmissionType = TransmissionType.manual
       ret.minEnableSpeed = 20.0 * CV.MPH_TO_MS
 
-    # BSM: Side_Detect_L_Stat, Side_Detect_R_Stat
-    # TODO: detect bsm in car_fw?
+    # 盲点监测
     ret.enableBsm = 0x3A6 in fingerprint[CAN.main] and 0x3A7 in fingerprint[CAN.main]
 
-    # LCA can steer down to zero
+    # LCA 可以在静止时转向
     ret.minSteerSpeed = 0.
 
     ret.autoResumeSng = ret.minEnableSpeed == -1.
@@ -74,6 +83,7 @@ class CarInterface(CarInterfaceBase):
   def _update(self, c):
     ret = self.CS.update(self.cp, self.cp_cam)
 
+    # 创建按钮事件，处理驾驶员的输入
     ret.buttonEvents = create_button_events(self.CS.distance_button, self.CS.prev_distance_button, {1: ButtonType.gapAdjustCruise})
 
     events = self.create_common_events(ret, extra_gears=[GearShifter.manumatic])
