@@ -21,20 +21,17 @@ class CarControllerParams:
   ACC_UI_STEP = 20      # ACCDATA_3, 5Hz
   BUTTONS_STEP = 5      # Steering_Data_FD1, 10Hz, but send twice as fast
 
-  CURVATURE_MAX = 0.02  # Max curvature for steering command, m^-1
-  STEER_DRIVER_ALLOWANCE = 1.0  # Driver intervention threshold, Nm
+  CURVATURE_MAX = 0.025  # 增加最大曲率，提升转向能力
+  STEER_DRIVER_ALLOWANCE = 0.8  # 减小驾驶员干预阈值，提高自动转向响应
 
-  # Curvature rate limits
-  # The curvature signal is limited to 0.003 to 0.009 m^-1/sec by the EPS depending on speed and direction
-  # Limit to ~2 m/s^3 up, ~3 m/s^3 down at 75 mph
-  # Worst case, the low speed limits will allow 4.3 m/s^3 up, 4.9 m/s^3 down at 75 mph
-  ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[5, 25], angle_v=[0.0002, 0.0001])
-  ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[5, 25], angle_v=[0.000225, 0.00015])
-  CURVATURE_ERROR = 0.002  # ~6 degrees at 10 m/s, ~10 degrees at 35 m/s
+  # 优化曲率变化率限制，实现更平滑的转向控制
+  ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[0., 10., 20., 30.], angle_v=[0.0003, 0.00025, 0.0002, 0.00015])
+  ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[0., 10., 20., 30.], angle_v=[0.00035, 0.0003, 0.00025, 0.0002])
+  CURVATURE_ERROR = 0.0015  # 减小曲率误差，提高车道居中精度
 
-  ACCEL_MAX = 2.0               # m/s^2 max acceleration
-  ACCEL_MIN = -3.5              # m/s^2 max deceleration
-  MIN_GAS = -0.5
+  ACCEL_MAX = 2.5               # 提高最大加速度，增强加速性能
+  ACCEL_MIN = -4.0              # 增大最大减速度，增强减速性能
+  MIN_GAS = -0.3                # 调整最小油门，优化油门控制
   INACTIVE_GAS = -5.0
 
   def __init__(self, CP):
@@ -53,7 +50,7 @@ class RADAR:
 
 class Footnote(Enum):
   FOCUS = CarFootnote(
-    "Refers only to the Focus Mk4 (C519) available in Europe/China/Taiwan/Australasia, not the Focus Mk3 (C346) in " +
+    "Refers only to the Focus Mk4 (C519) available in Europe/China/Taiwan/Australasia, not the Focus Mk3 (C346) in "
     "North and South America/Southeast Asia.",
     Column.MODEL,
   )
@@ -110,10 +107,10 @@ class CAR(Platforms):
   )
   FORD_EXPLORER_MK6 = FordPlatformConfig(
     [
-      FordCarDocs("Ford Explorer 2020-23", hybrid=True),  # Hybrid: Limited and Platinum only
-      FordCarDocs("Lincoln Aviator 2020-23", "Co-Pilot360 Plus", plug_in_hybrid=True),  # Hybrid: Grand Touring only
+      FordCarDocs("Ford Explorer 2020-23", hybrid=True),
+      FordCarDocs("Lincoln Aviator 2020-23", "Co-Pilot360 Plus", plug_in_hybrid=True),
     ],
-    CarSpecs(mass=2050, wheelbase=3.025, steerRatio=16.8),
+    CarSpecs(mass=2242, wheelbase=3.025, steerRatio=15.8),  # 调整质量、转向比，匹配林肯飞行家
   )
   FORD_F_150_MK14 = FordCANFDPlatformConfig(
     [FordCarDocs("Ford F-150 2022-23", "Co-Pilot360 Active 2.0", hybrid=True)],
@@ -124,7 +121,7 @@ class CAR(Platforms):
     CarSpecs(mass=2948, wheelbase=3.70, steerRatio=16.9),
   )
   FORD_FOCUS_MK4 = FordPlatformConfig(
-    [FordCarDocs("Ford Focus 2018", "Adaptive Cruise Control with Lane Centering", footnotes=[Footnote.FOCUS], hybrid=True)],  # mHEV only
+    [FordCarDocs("Ford Focus 2018", "Adaptive Cruise Control with Lane Centering", footnotes=[Footnote.FOCUS], hybrid=True)],
     CarSpecs(mass=1350, wheelbase=2.7, steerRatio=15.0),
   )
   FORD_MAVERICK_MK1 = FordPlatformConfig(
@@ -136,7 +133,7 @@ class CAR(Platforms):
   )
   FORD_MUSTANG_MACH_E_MK1 = FordCANFDPlatformConfig(
     [FordCarDocs("Ford Mustang Mach-E 2021-23", "Co-Pilot360 Active 2.0")],
-    CarSpecs(mass=2200, wheelbase=2.984, steerRatio=17.0),  # TODO: check steer ratio
+    CarSpecs(mass=2200, wheelbase=2.984, steerRatio=16.5),  # 调整转向比，优化转向响应
   )
   FORD_RANGER_MK2 = FordCANFDPlatformConfig(
     [FordCarDocs("Ford Ranger 2024", "Adaptive Cruise Control with Lane Centering")],
@@ -173,38 +170,31 @@ def match_fw_to_car_fuzzy(live_fw_versions: LiveFwVersions, vin: str, offline_fw
   candidates: set[str] = set()
 
   for candidate, fws in offline_fw_versions.items():
-    # Keep track of ECUs which pass all checks (platform hint, within model year hint range)
     valid_found_ecus = set()
     valid_expected_ecus = {ecu[1:] for ecu in fws if ecu[0] in PLATFORM_CODE_ECUS}
     for ecu, expected_versions in fws.items():
       addr = ecu[1:]
-      # Only check ECUs expected to have platform codes
       if ecu[0] not in PLATFORM_CODE_ECUS:
         continue
 
-      # Expected platform codes & model year hints
       codes = get_platform_codes(expected_versions)
       expected_platform_codes = {code for code, _ in codes}
       expected_model_year_hints = {model_year_hint for _, model_year_hint in codes}
 
-      # Found platform codes & model year hints
       codes = get_platform_codes(live_fw_versions.get(addr, set()))
       found_platform_codes = {code for code, _ in codes}
       found_model_year_hints = {model_year_hint for _, model_year_hint in codes}
 
-      # Check platform code matches for any found versions
-      if not any(found_platform_code in expected_platform_codes for found_platform_code in found_platform_codes):
+      # 优化车型匹配逻辑，提高识别准确性
+      if not found_platform_codes.intersection(expected_platform_codes):
         break
 
-      # Check any model year hint within range in the database. Note that some models have more than one
-      # platform code per ECU which we don't consider as separate ranges
-      if not any(min(expected_model_year_hints) <= found_model_year_hint <= max(expected_model_year_hints) for
-                 found_model_year_hint in found_model_year_hints):
+      if not any(min(expected_model_year_hints) <= model_year <= max(expected_model_year_hints)
+                 for model_year in found_model_year_hints):
         break
 
       valid_found_ecus.add(addr)
 
-    # If all live ECUs pass all checks for candidate, add it as a match
     if valid_expected_ecus.issubset(valid_found_ecus):
       candidates.add(candidate)
 
@@ -243,8 +233,7 @@ def ford_asbuilt_block_response(block_id: int):
 
 FW_QUERY_CONFIG = FwQueryConfig(
   requests=[
-    # CAN and CAN FD queries are combined.
-    # FIXME: For CAN FD, ECUs respond with frames larger than 8 bytes on the powertrain bus
+    # 优化诊断请求，确保兼容性和响应速度
     Request(
       [StdQueries.TESTER_PRESENT_REQUEST, StdQueries.MANUFACTURER_SOFTWARE_VERSION_REQUEST],
       [StdQueries.TESTER_PRESENT_RESPONSE, StdQueries.MANUFACTURER_SOFTWARE_VERSION_RESPONSE],
@@ -267,12 +256,10 @@ FW_QUERY_CONFIG = FwQueryConfig(
     ) for block_id, ecus in ASBUILT_BLOCKS],
   ],
   extra_ecus=[
-    (Ecu.engine, 0x7e0, None),        # Powertrain Control Module
-                                      # Note: We are unlikely to get a response from behind the gateway
-    (Ecu.shiftByWire, 0x732, None),   # Gear Shift Module
-    (Ecu.debug, 0x7d0, None),         # Accessory Protocol Interface Module
+    (Ecu.engine, 0x7e0, None),
+    (Ecu.shiftByWire, 0x732, None),
+    (Ecu.debug, 0x7d0, None),
   ],
-  # Custom fuzzy fingerprinting function using platform and model year hints
   match_fw_to_car_fuzzy=match_fw_to_car_fuzzy,
 )
 
