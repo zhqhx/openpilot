@@ -9,7 +9,6 @@ from openpilot.selfdrive.car.interfaces import CarStateBase
 GearShifter = car.CarState.GearShifter
 TransmissionType = car.CarParams.TransmissionType
 
-
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
@@ -22,43 +21,55 @@ class CarState(CarStateBase):
     self.prev_distance_button = 0
     self.distance_button = 0
 
+    # 初始化滤波器和状态变量
+    self.steering_angle_filtered = 0.0
+    self.yaw_rate_filtered = 0.0
+    self.alpha = 0.1  # 滤波系数，可根据需要调整
+
   def update(self, cp, cp_cam):
     ret = car.CarState.new_message()
 
-    # Occasionally on startup, the ABS module recalibrates the steering pinion offset, so we need to block engagement
-    # The vehicle usually recovers out of this state within a minute of normal driving
+    # 确保车辆传感器数据有效
     self.vehicle_sensors_valid = cp.vl["SteeringPinion_Data"]["StePinCompAnEst_D_Qf"] == 3
 
-    # car speed
+    # 车辆速度和加速度
     ret.vEgoRaw = cp.vl["BrakeSysFeatures"]["Veh_V_ActlBrk"] * CV.KPH_TO_MS
     ret.vEgo, ret.aEgo = self.update_speed_kf(ret.vEgoRaw)
-    ret.yawRate = cp.vl["Yaw_Data_FD1"]["VehYaw_W_Actl"]
     ret.standstill = cp.vl["DesiredTorqBrk"]["VehStop_D_Stat"] == 1
 
-    # gas pedal
+    # 滤波后的偏航率，用于提高曲率计算的准确性
+    raw_yaw_rate = cp.vl["Yaw_Data_FD1"]["VehYaw_W_Actl"]
+    self.yaw_rate_filtered = (1 - self.alpha) * self.yaw_rate_filtered + self.alpha * raw_yaw_rate
+    ret.yawRate = self.yaw_rate_filtered
+
+    # 油门信息
     ret.gas = cp.vl["EngVehicleSpThrottle"]["ApedPos_Pc_ActlArb"] / 100.
     ret.gasPressed = ret.gas > 1e-6
 
-    # brake pedal
-    ret.brake = cp.vl["BrakeSnData_4"]["BrkTot_Tq_Actl"] / 32756.  # torque in Nm
+    # 刹车信息
+    ret.brake = cp.vl["BrakeSnData_4"]["BrkTot_Tq_Actl"] / 32756.
     ret.brakePressed = cp.vl["EngBrakeData"]["BpedDrvAppl_D_Actl"] == 2
     ret.parkingBrake = cp.vl["DesiredTorqBrk"]["PrkBrkStatus"] in (1, 2)
 
-    # steering wheel
-    ret.steeringAngleDeg = cp.vl["SteeringPinion_Data"]["StePinComp_An_Est"]
+    # 转向角度，添加滤波以减少噪声
+    raw_steering_angle = cp.vl["SteeringPinion_Data"]["StePinComp_An_Est"]
+    self.steering_angle_filtered = (1 - self.alpha) * self.steering_angle_filtered + self.alpha * raw_steering_angle
+    ret.steeringAngleDeg = self.steering_angle_filtered
+
     ret.steeringTorque = cp.vl["EPAS_INFO"]["SteeringColumnTorque"]
-    ret.steeringPressed = self.update_steering_pressed(abs(ret.steeringTorque) > CarControllerParams.STEER_DRIVER_ALLOWANCE, 5)
+    ret.steeringPressed = self.update_steering_pressed(
+      abs(ret.steeringTorque) > CarControllerParams.STEER_DRIVER_ALLOWANCE, 5)
     ret.steerFaultTemporary = cp.vl["EPAS_INFO"]["EPAS_Failure"] == 1
     ret.steerFaultPermanent = cp.vl["EPAS_INFO"]["EPAS_Failure"] in (2, 3)
-    ret.espDisabled = cp.vl["Cluster_Info1_FD1"]["DrvSlipCtlMde_D_Rq"] != 0  # 0 is default mode
+    ret.espDisabled = cp.vl["Cluster_Info1_FD1"]["DrvSlipCtlMde_D_Rq"] != 0
 
     if self.CP.flags & FordFlags.CANFD:
-      # this signal is always 0 on non-CAN FD cars
       ret.steerFaultTemporary |= cp.vl["Lane_Assist_Data3_FD1"]["LatCtlSte_D_Stat"] not in (1, 2, 3)
 
-    # cruise state
+    # 巡航控制状态
     is_metric = cp.vl["INSTRUMENT_PANEL"]["METRIC_UNITS"] == 1 if not self.CP.flags & FordFlags.CANFD else False
-    ret.cruiseState.speed = cp.vl["EngBrakeData"]["Veh_V_DsplyCcSet"] * (CV.KPH_TO_MS if is_metric else CV.MPH_TO_MS)
+    ret.cruiseState.speed = cp.vl["EngBrakeData"]["Veh_V_DsplyCcSet"] * \
+                            (CV.KPH_TO_MS if is_metric else CV.MPH_TO_MS)
     ret.cruiseState.enabled = cp.vl["EngBrakeData"]["CcStat_D_Actl"] in (4, 5)
     ret.cruiseState.available = cp.vl["EngBrakeData"]["CcStat_D_Actl"] in (3, 4, 5)
     ret.cruiseState.nonAdaptive = cp.vl["Cluster_Info1_FD1"]["AccEnbl_B_RqDrv"] == 0
@@ -67,7 +78,7 @@ class CarState(CarStateBase):
     if not self.CP.openpilotLongitudinalControl:
       ret.accFaulted = ret.accFaulted or cp_cam.vl["ACCDATA"]["CmbbDeny_B_Actl"] == 1
 
-    # gear
+    # 档位信息
     if self.CP.transmissionType == TransmissionType.automatic:
       gear = self.shifter_values.get(cp.vl["Gear_Shift_by_Wire_FD1"]["TrnRng_D_RqGsm"])
       ret.gearShifter = self.parse_gear_shifter(gear)
@@ -78,32 +89,34 @@ class CarState(CarStateBase):
       else:
         ret.gearShifter = GearShifter.drive
 
-    # safety
+    # 安全信息
     ret.stockFcw = bool(cp_cam.vl["ACCDATA_3"]["FcwVisblWarn_B_Rq"])
     ret.stockAeb = bool(cp_cam.vl["ACCDATA_2"]["CmbbBrkDecel_B_Rq"])
 
-    # button presses
+    # 按钮状态
     ret.leftBlinker = cp.vl["Steering_Data_FD1"]["TurnLghtSwtch_D_Stat"] == 1
     ret.rightBlinker = cp.vl["Steering_Data_FD1"]["TurnLghtSwtch_D_Stat"] == 2
-    # TODO: block this going to the camera otherwise it will enable stock TJA
     ret.genericToggle = bool(cp.vl["Steering_Data_FD1"]["TjaButtnOnOffPress"])
     self.prev_distance_button = self.distance_button
     self.distance_button = cp.vl["Steering_Data_FD1"]["AccButtnGapTogglePress"]
 
-    # lock info
-    ret.doorOpen = any([cp.vl["BodyInfo_3_FD1"]["DrStatDrv_B_Actl"], cp.vl["BodyInfo_3_FD1"]["DrStatPsngr_B_Actl"],
-                        cp.vl["BodyInfo_3_FD1"]["DrStatRl_B_Actl"], cp.vl["BodyInfo_3_FD1"]["DrStatRr_B_Actl"]])
+    # 车门和安全带状态
+    ret.doorOpen = any([
+      cp.vl["BodyInfo_3_FD1"]["DrStatDrv_B_Actl"],
+      cp.vl["BodyInfo_3_FD1"]["DrStatPsngr_B_Actl"],
+      cp.vl["BodyInfo_3_FD1"]["DrStatRl_B_Actl"],
+      cp.vl["BodyInfo_3_FD1"]["DrStatRr_B_Actl"]
+    ])
     ret.seatbeltUnlatched = cp.vl["RCMStatusMessage2_FD1"]["FirstRowBuckleDriver"] == 2
 
-    # blindspot sensors
+    # 盲点监测
     if self.CP.enableBsm:
       cp_bsm = cp_cam if self.CP.flags & FordFlags.CANFD else cp
       ret.leftBlindspot = cp_bsm.vl["Side_Detect_L_Stat"]["SodDetctLeft_D_Stat"] != 0
       ret.rightBlindspot = cp_bsm.vl["Side_Detect_R_Stat"]["SodDetctRight_D_Stat"] != 0
 
-    # Stock steering buttons so that we can passthru blinkers etc.
+    # 保存原始按钮值和状态
     self.buttons_stock_values = cp.vl["Steering_Data_FD1"]
-    # Stock values from IPMA so that we can retain some stock functionality
     self.acc_tja_status_stock_values = cp_cam.vl["ACCDATA_3"]
     self.lkas_status_stock_values = cp_cam.vl["IPMA_Data"]
 
@@ -112,7 +125,6 @@ class CarState(CarStateBase):
   @staticmethod
   def get_can_parser(CP):
     messages = [
-      # sig_address, frequency
       ("VehicleOperatingModes", 100),
       ("BrakeSysFeatures", 50),
       ("Yaw_Data_FD1", 100),
@@ -158,7 +170,6 @@ class CarState(CarStateBase):
   @staticmethod
   def get_cam_can_parser(CP):
     messages = [
-      # sig_address, frequency
       ("ACCDATA", 50),
       ("ACCDATA_2", 50),
       ("ACCDATA_3", 5),
