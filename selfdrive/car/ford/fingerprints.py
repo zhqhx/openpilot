@@ -1,7 +1,7 @@
-from cereal import car
-from openpilot.selfdrive.car.ford.values import CAR
+from opendbc.car.structs import CarParams
+from opendbc.car.ford.values import CAR
 
-Ecu = car.CarParams.Ecu
+Ecu = CarParams.Ecu
 
 FW_VERSIONS = {
   CAR.FORD_BRONCO_SPORT_MK1: {
@@ -65,7 +65,8 @@ FW_VERSIONS = {
       b'L1MC-2D053-KB\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
     ],
     (Ecu.fwdRadar, 0x764, None): [
-      b'LB5T-14D049-AD\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+      b'LB5T-14D049-AB\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+      b'JX7T-14D049-AD\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
     ],
     (Ecu.fwdCamera, 0x706, None): [
       b'LB5T-14F397-AD\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
